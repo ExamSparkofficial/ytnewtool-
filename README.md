@@ -7,6 +7,8 @@ The input flow includes a language selector so the generated script, spoken voic
 ## Features
 
 - Step-by-step dashboard for ideation to export
+- First-time tutorial block for onboarding
+- Login-gated generation flow with Firebase Authentication
 - 3 OpenAI-generated short video scripts per request
 - Language-aware output for English, Hindi, and Hinglish
 - 2-3 ElevenLabs voice preview variations
@@ -27,6 +29,7 @@ The input flow includes a language selector so the generated script, spoken voic
 - ElevenLabs API for voice generation
 - Pexels API for stock footage
 - FFmpeg and ffprobe for video composition
+- Firebase Authentication for Google and phone login
 
 ## 1. Install dependencies
 
@@ -64,6 +67,12 @@ Required values:
 - `OPENAI_API_KEY`
 - `ELEVENLABS_API_KEY`
 - `PEXELS_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
 
 Optional values:
 
@@ -106,6 +115,12 @@ Before deploying:
    - `OPENAI_API_KEY`
    - `ELEVENLABS_API_KEY`
    - `PEXELS_API_KEY`
+   - `NEXT_PUBLIC_FIREBASE_API_KEY`
+   - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+   - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+   - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+   - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+   - `NEXT_PUBLIC_FIREBASE_APP_ID`
    - `OPENAI_MODEL`
    - `ELEVENLABS_MODEL`
 6. Do not set the Windows-only `FFMPEG_PATH` and `FFPROBE_PATH` values in Vercel unless you intentionally override the packaged Linux binaries
@@ -162,6 +177,8 @@ runtime/
 
 ## Troubleshooting
 
+- If login is blocked, confirm Google and Phone sign-in are enabled in Firebase Authentication.
+- For phone auth, add your local and production domains to Firebase authorized domains.
 - If voice generation fails, confirm your ElevenLabs key has text-to-speech access.
 - If video rendering fails immediately, verify `ffmpeg` and `ffprobe` can be executed from your shell.
 - If stock footage does not appear, check the `PEXELS_API_KEY`. The app will still render with fallback visuals.

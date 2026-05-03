@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import type { User } from "firebase/auth";
 
+import { AuthPanel } from "@/components/auth-panel";
 import { CopyButton } from "@/components/copy-button";
 import { ScriptCard } from "@/components/script-card";
-import { StepProgress } from "@/components/step-progress";
 import { VoiceCard } from "@/components/voice-card";
 import { languageLabels } from "@/lib/types";
 import type {
@@ -19,14 +21,31 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const steps = ["Input", "Scripts", "Voice", "Video", "Download"];
-
 const defaultInput: EngineInput = {
   keyword: "",
   tone: "motivational",
   duration: 30,
   language: "english"
 };
+
+const tutorialSteps = [
+  {
+    title: "Sign in first",
+    description: "Use Google or phone login from the profile menu before generating anything."
+  },
+  {
+    title: "Set your creative direction",
+    description: "Enter a keyword, then choose the tone, language, and short length."
+  },
+  {
+    title: "Pick script and voice",
+    description: "Select the strongest script angle and the voice variation that fits your channel."
+  },
+  {
+    title: "Render and publish",
+    description: "Create the video, review the metadata, then download the MP4 and copy captions."
+  }
+] as const;
 
 export function ContentEngine() {
   const [form, setForm] = useState<EngineInput>(defaultInput);
@@ -36,9 +55,11 @@ export function ContentEngine() {
   const [video, setVideo] = useState<GeneratedVideo | null>(null);
   const [selectedScriptId, setSelectedScriptId] = useState<string>("");
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
-  const [currentStep, setCurrentStep] = useState(1);
   const [busyStage, setBusyStage] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [user, setUser] = useState<User | null>(null);
+  const [hasMounted, setHasMounted] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const selectedScript = useMemo(
     () => scripts.find((item) => item.id === selectedScriptId) ?? null,
@@ -49,6 +70,16 @@ export function ContentEngine() {
     () => voices.find((item) => item.id === selectedVoiceId) ?? null,
     [voices, selectedVoiceId]
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setHasMounted(true);
+    const dismissed = window.localStorage.getItem("vyntrix-tutorial-dismissed");
+    setShowTutorial(dismissed !== "true");
+  }, []);
 
   function resetFromScripts() {
     setVoices([]);
@@ -74,8 +105,27 @@ export function ContentEngine() {
     return json;
   }
 
+  function ensureAuthenticated() {
+    if (user) {
+      return true;
+    }
+
+    setError("Please sign in with Google or phone number before generating content.");
+    return false;
+  }
+
+  function dismissTutorial() {
+    setShowTutorial(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("vyntrix-tutorial-dismissed", "true");
+    }
+  }
+
   async function handleGenerateScripts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!ensureAuthenticated()) {
+      return;
+    }
     setError("");
     setBusyStage("Generating script concepts");
     resetFromScripts();
@@ -85,7 +135,6 @@ export function ContentEngine() {
     try {
       const result = await postJson<{ scripts: GeneratedScript[] }>("/api/scripts", form);
       setScripts(result.scripts);
-      setCurrentStep(2);
       if (result.scripts[0]) {
         setSelectedScriptId(result.scripts[0].id);
       }
@@ -97,6 +146,10 @@ export function ContentEngine() {
   }
 
   async function handleContinueToVoice() {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
     if (!selectedScript) {
       setError("Choose a script before moving to voice generation.");
       return;
@@ -124,7 +177,6 @@ export function ContentEngine() {
 
       setVoices(voiceResult.voices);
       setMetadata(metadataResult.metadata);
-      setCurrentStep(3);
       if (voiceResult.voices[0]) {
         setSelectedVoiceId(voiceResult.voices[0].id);
       }
@@ -138,13 +190,16 @@ export function ContentEngine() {
   }
 
   async function handleRenderVideo() {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
     if (!selectedScript || !selectedVoice) {
       setError("Select both a script and a voice before rendering.");
       return;
     }
 
     setError("");
-    setCurrentStep(4);
     setBusyStage("Rendering MP4 with stock footage, captions, and voiceover");
     setVideo(null);
 
@@ -156,7 +211,6 @@ export function ContentEngine() {
       });
 
       setVideo(result.video);
-      setCurrentStep(5);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to render video.");
     } finally {
@@ -172,9 +226,31 @@ export function ContentEngine() {
         <div className="absolute inset-0 bg-grid bg-[size:38px_38px] opacity-20" />
 
         <div className="relative z-10 space-y-8">
+          <div className="flex items-center justify-between gap-4">
+            <div className="inline-flex items-center gap-4 rounded-full border border-white/10 bg-slate-950/40 px-4 py-3 backdrop-blur">
+              <div className="relative h-11 w-11 overflow-hidden rounded-2xl ring-1 ring-white/10">
+                <Image
+                  src="/vyntrix-logo.webp"
+                  alt="VYNTRIX logo"
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.32em] text-sky-200">VYNTRIX</p>
+                <p className="text-sm font-medium text-white">AI Content Engine</p>
+              </div>
+            </div>
+
+            {hasMounted ? <AuthPanel onAuthStateChange={setUser} /> : <ProfilePlaceholder />}
+          </div>
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <p className="text-sm uppercase tracking-[0.35em] text-sky-200">AI Content Engine</p>
+              <p className="text-sm uppercase tracking-[0.35em] text-sky-200">
+                VYNTRIX AI Content Engine
+              </p>
               <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
                 Turn one idea into a short-form video pipeline.
               </h1>
@@ -185,17 +261,50 @@ export function ContentEngine() {
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-slate-950/35 px-5 py-4 text-sm text-slate-300">
-              <p className="font-medium text-white">Workflow</p>
-              <p className="mt-1">OpenAI for writing, ElevenLabs for voice, Pexels plus FFmpeg for video.</p>
+              <p className="font-medium text-white">{user ? "Access unlocked" : "Login required"}</p>
+              <p className="mt-1">
+                {user
+                  ? "OpenAI for writing, ElevenLabs for voice, Pexels plus FFmpeg for video."
+                  : "Sign in from the top-right menu to unlock script, voice, and video generation."}
+              </p>
               <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">
                 Active language: {languageLabels[form.language]}
               </p>
             </div>
           </div>
-
-          <StepProgress currentStep={currentStep} steps={steps} />
         </div>
       </section>
+
+      {hasMounted && showTutorial ? (
+        <section className="rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-sm uppercase tracking-[0.25em] text-slate-400">First-time tutorial</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">How to use VYNTRIX the first time</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                This quick guide stays visible for new users. Once you are comfortable, dismiss it and the main workspace becomes more compact.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissTutorial}
+              className="rounded-full border border-white/10 bg-slate-950/45 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-900/70"
+            >
+              Hide tutorial
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {tutorialSteps.map((step, index) => (
+              <div key={step.title} className="rounded-[28px] border border-white/10 bg-slate-950/35 p-5">
+                <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Step {index + 1}</p>
+                <h3 className="mt-3 text-lg font-semibold text-white">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-300">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-8 xl:grid-cols-[1.05fr_0.95fr]">
         {/* Input and script selection */}
@@ -278,10 +387,10 @@ export function ContentEngine() {
 
             <button
               type="submit"
-              disabled={Boolean(busyStage)}
+              disabled={Boolean(busyStage) || !user}
               className="inline-flex items-center rounded-full bg-sky-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Generate 3 scripts
+              {user ? "Generate 3 scripts" : "Login to generate"}
             </button>
           </form>
 
@@ -300,7 +409,7 @@ export function ContentEngine() {
               <button
                 type="button"
                 onClick={handleContinueToVoice}
-                disabled={!selectedScript || Boolean(busyStage)}
+                disabled={!selectedScript || Boolean(busyStage) || !user}
                 className="rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Continue to voice
@@ -336,7 +445,7 @@ export function ContentEngine() {
               <button
                 type="button"
                 onClick={handleRenderVideo}
-                disabled={!selectedVoice || Boolean(busyStage)}
+                disabled={!selectedVoice || Boolean(busyStage) || !user}
                 className="rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Render video
@@ -466,6 +575,20 @@ function EmptyState({ description }: { description: string }) {
   return (
     <div className="rounded-[28px] border border-dashed border-white/10 bg-slate-950/35 px-5 py-10 text-center text-sm text-slate-400">
       {description}
+    </div>
+  );
+}
+
+function ProfilePlaceholder() {
+  return (
+    <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-slate-950/40 px-4 py-3 text-left text-sm text-white/70">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-sky-200">
+        V
+      </span>
+      <span>
+        <span className="block font-medium">Profile</span>
+        <span className="block text-xs uppercase tracking-[0.2em] text-slate-400">Loading</span>
+      </span>
     </div>
   );
 }
