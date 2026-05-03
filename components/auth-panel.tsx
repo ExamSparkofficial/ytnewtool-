@@ -36,6 +36,7 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
 
   const isConfigured = useMemo(() => isFirebaseConfigured(), []);
   const isPhoneStepActive = Boolean(confirmationResult);
+  const showDebugConfig = process.env.NODE_ENV !== "production";
 
   useEffect(() => {
     setHasMounted(true);
@@ -401,22 +402,26 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
             </div>
           ) : null}
 
-          <div className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <p className="text-sm font-medium text-white">Firebase web config placeholders</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {firebaseEnvFields.map((field) => (
-                <span
-                  key={field}
-                  className="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-slate-300"
-                >
-                  {field}
-                </span>
-              ))}
-            </div>
-            <p className="mt-3 text-xs leading-6 text-slate-400">
-              Paste your Firebase web app values into `.env.local`, enable Google and Phone sign-in in the Firebase console, and add your domain to authorized domains for phone auth.
-            </p>
-          </div>
+          {showDebugConfig ? (
+            <details className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
+              <summary className="cursor-pointer list-none text-sm font-medium text-white">
+                Firebase web config placeholders
+              </summary>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {firebaseEnvFields.map((field) => (
+                  <span
+                    key={field}
+                    className="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-slate-300"
+                  >
+                    {field}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-6 text-slate-400">
+                Paste your Firebase web app values into `.env.local`, enable Google and Phone sign-in in the Firebase console, and add your domain to authorized domains for phone auth.
+              </p>
+            </details>
+          ) : null}
 
           {authError ? (
             <div className="mt-4 rounded-2xl border border-rose-300/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
