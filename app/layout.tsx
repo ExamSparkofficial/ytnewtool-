@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 
 import "@/app/globals.css";
-import { FirebaseBootstrap } from "@/components/firebase-bootstrap";
 
 const headingFont = Space_Grotesk({
   variable: "--font-heading",
@@ -42,7 +41,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning className={`${headingFont.variable} ${bodyFont.variable} bg-surface text-ink`}>
-        <FirebaseBootstrap />
         {children}
       </body>
     </html>

@@ -2,9 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import type { User } from "firebase/auth";
 
-import { AuthPanel } from "@/components/auth-panel";
 import { CopyButton } from "@/components/copy-button";
 import { ScriptCard } from "@/components/script-card";
 import { VoiceCard } from "@/components/voice-card";
@@ -30,16 +28,16 @@ const defaultInput: EngineInput = {
 
 const tutorialSteps = [
   {
-    title: "Sign in first",
-    description: "Use Google or phone login from the profile menu before generating anything."
-  },
-  {
-    title: "Set your creative direction",
+    title: "Start with an idea",
     description: "Enter a keyword, then choose the tone, language, and short length."
   },
   {
-    title: "Pick script and voice",
-    description: "Select the strongest script angle and the voice variation that fits your channel."
+    title: "Pick a script",
+    description: "Generate three angles and choose the one that best fits the video."
+  },
+  {
+    title: "Choose a voice",
+    description: "Preview Google TTS variations and select the delivery that fits your channel."
   },
   {
     title: "Render and publish",
@@ -57,7 +55,6 @@ export function ContentEngine() {
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [busyStage, setBusyStage] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [user, setUser] = useState<User | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -105,15 +102,6 @@ export function ContentEngine() {
     return json;
   }
 
-  function ensureAuthenticated() {
-    if (user) {
-      return true;
-    }
-
-    setError("Please sign in with Google or phone number before generating content.");
-    return false;
-  }
-
   function dismissTutorial() {
     setShowTutorial(false);
     if (typeof window !== "undefined") {
@@ -123,9 +111,6 @@ export function ContentEngine() {
 
   async function handleGenerateScripts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!ensureAuthenticated()) {
-      return;
-    }
     setError("");
     setBusyStage("Generating script concepts");
     resetFromScripts();
@@ -146,10 +131,6 @@ export function ContentEngine() {
   }
 
   async function handleContinueToVoice() {
-    if (!ensureAuthenticated()) {
-      return;
-    }
-
     if (!selectedScript) {
       setError("Choose a script before moving to voice generation.");
       return;
@@ -190,10 +171,6 @@ export function ContentEngine() {
   }
 
   async function handleRenderVideo() {
-    if (!ensureAuthenticated()) {
-      return;
-    }
-
     if (!selectedScript || !selectedVoice) {
       setError("Select both a script and a voice before rendering.");
       return;
@@ -243,7 +220,17 @@ export function ContentEngine() {
               </div>
             </div>
 
-            {hasMounted ? <AuthPanel onAuthStateChange={setUser} /> : <ProfilePlaceholder />}
+            <div className="inline-flex items-center gap-3 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-left text-sm text-emerald-100">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/15 text-sm font-semibold text-emerald-100">
+                AI
+              </span>
+              <span>
+                <span className="block font-medium text-white">Open access</span>
+                <span className="block text-xs uppercase tracking-[0.2em] text-emerald-200/80">
+                  Login removed
+                </span>
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -261,12 +248,8 @@ export function ContentEngine() {
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-slate-950/35 px-5 py-4 text-sm text-slate-300">
-              <p className="font-medium text-white">{user ? "Access unlocked" : "Login required"}</p>
-              <p className="mt-1">
-                {user
-                  ? "Gemini for writing, Google TTS for voice, Pexels plus FFmpeg for video."
-                  : "Sign in from the top-right menu to unlock script, voice, and video generation."}
-              </p>
+              <p className="font-medium text-white">Access unlocked</p>
+              <p className="mt-1">Gemini for writing, Google TTS for voice, Pexels plus FFmpeg for video.</p>
               <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">
                 Active language: {languageLabels[form.language]}
               </p>
@@ -387,10 +370,10 @@ export function ContentEngine() {
 
             <button
               type="submit"
-              disabled={Boolean(busyStage) || !user}
+              disabled={Boolean(busyStage)}
               className="inline-flex items-center rounded-full bg-sky-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {user ? "Generate 3 scripts" : "Login to generate"}
+              Generate 3 scripts
             </button>
           </form>
 
@@ -409,7 +392,7 @@ export function ContentEngine() {
               <button
                 type="button"
                 onClick={handleContinueToVoice}
-                disabled={!selectedScript || Boolean(busyStage) || !user}
+                disabled={!selectedScript || Boolean(busyStage)}
                 className="rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Continue to voice
@@ -445,7 +428,7 @@ export function ContentEngine() {
               <button
                 type="button"
                 onClick={handleRenderVideo}
-                disabled={!selectedVoice || Boolean(busyStage) || !user}
+                disabled={!selectedVoice || Boolean(busyStage)}
                 className="rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Render video
@@ -575,20 +558,6 @@ function EmptyState({ description }: { description: string }) {
   return (
     <div className="rounded-[28px] border border-dashed border-white/10 bg-slate-950/35 px-5 py-10 text-center text-sm text-slate-400">
       {description}
-    </div>
-  );
-}
-
-function ProfilePlaceholder() {
-  return (
-    <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-slate-950/40 px-4 py-3 text-left text-sm text-white/70">
-      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-sky-200">
-        V
-      </span>
-      <span>
-        <span className="block font-medium">Profile</span>
-        <span className="block text-xs uppercase tracking-[0.2em] text-slate-400">Loading</span>
-      </span>
     </div>
   );
 }

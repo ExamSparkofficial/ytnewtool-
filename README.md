@@ -8,7 +8,7 @@ The input flow includes a language selector so the generated script, spoken voic
 
 - Step-by-step dashboard for ideation to export
 - First-time tutorial block for onboarding
-- Login-gated generation flow with Firebase Authentication
+- Open generation flow with login temporarily disabled
 - 3 Gemini-generated short video scripts per request
 - Language-aware output for English, Hindi, and Hinglish
 - 3 Google Cloud Text-to-Speech voice preview variations
@@ -29,7 +29,6 @@ The input flow includes a language selector so the generated script, spoken voic
 - Google Cloud Text-to-Speech API for voice generation
 - Pexels API for stock footage
 - FFmpeg and ffprobe for video composition
-- Firebase Authentication for Google and phone login
 
 ## 1. Install dependencies
 
@@ -67,12 +66,6 @@ Required values:
 - `GEMINI_API_KEY`
 - `GOOGLE_TTS_API_KEY`, or reuse `GEMINI_API_KEY` if it was created in the same billing-enabled Google Cloud project with Text-to-Speech enabled, or use service-account auth via `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_APPLICATION_CREDENTIALS`
 - `PEXELS_API_KEY`
-- `NEXT_PUBLIC_FIREBASE_API_KEY`
-- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
-- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
-- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
-- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
-- `NEXT_PUBLIC_FIREBASE_APP_ID`
 
 Optional values:
 
@@ -115,12 +108,6 @@ Before deploying:
    - `GEMINI_API_KEY`
    - `GOOGLE_TTS_API_KEY` or service-account auth variables for Google TTS
    - `PEXELS_API_KEY`
-   - `NEXT_PUBLIC_FIREBASE_API_KEY`
-   - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
-   - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
-   - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
-   - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
-   - `NEXT_PUBLIC_FIREBASE_APP_ID`
    - `GEMINI_MODEL`
 6. Do not set the Windows-only `FFMPEG_PATH` and `FFPROBE_PATH` values in Vercel unless you intentionally override the packaged Linux binaries
 
@@ -177,8 +164,6 @@ runtime/
 
 ## Troubleshooting
 
-- If login is blocked, confirm Google and Phone sign-in are enabled in Firebase Authentication.
-- For phone auth, add your local and production domains to Firebase authorized domains.
 - If voice generation fails, confirm Cloud Text-to-Speech is enabled and your Google auth belongs to a billing-enabled project.
 - If video rendering fails immediately, verify `ffmpeg` and `ffprobe` can be executed from your shell.
 - If stock footage does not appear, check the `PEXELS_API_KEY`. The app will still render with fallback visuals.
