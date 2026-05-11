@@ -264,7 +264,7 @@ export function ContentEngine() {
               <p className="font-medium text-white">{user ? "Access unlocked" : "Login required"}</p>
               <p className="mt-1">
                 {user
-                  ? "OpenAI for writing, ElevenLabs for voice, Pexels plus FFmpeg for video."
+                  ? "Gemini for writing, Google TTS for voice, Pexels plus FFmpeg for video."
                   : "Sign in from the top-right menu to unlock script, voice, and video generation."}
               </p>
               <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">

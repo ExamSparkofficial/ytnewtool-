@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { toErrorResponse } from "@/lib/errors";
-import { generateScripts } from "@/lib/openai";
+import { generateScripts } from "@/lib/gemini";
 import { cleanupExpiredArtifacts } from "@/lib/storage";
 import { engineInputSchema } from "@/lib/validators";
 

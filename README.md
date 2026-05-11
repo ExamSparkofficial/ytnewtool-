@@ -9,9 +9,9 @@ The input flow includes a language selector so the generated script, spoken voic
 - Step-by-step dashboard for ideation to export
 - First-time tutorial block for onboarding
 - Login-gated generation flow with Firebase Authentication
-- 3 OpenAI-generated short video scripts per request
+- 3 Gemini-generated short video scripts per request
 - Language-aware output for English, Hindi, and Hinglish
-- 2-3 ElevenLabs voice preview variations
+- 3 Google Cloud Text-to-Speech voice preview variations
 - MP4 rendering with FFmpeg, subtitles, and stock footage
 - Vercel-compatible runtime storage with Blob-backed media URLs
 - Pexels stock clips with automatic fallback visuals if no clip is available
@@ -25,8 +25,8 @@ The input flow includes a language selector so the generated script, spoken voic
 - React 19
 - Tailwind CSS
 - Next.js route handlers for backend APIs
-- OpenAI API for scripts and metadata
-- ElevenLabs API for voice generation
+- Gemini API for scripts and metadata
+- Google Cloud Text-to-Speech API for voice generation
 - Pexels API for stock footage
 - FFmpeg and ffprobe for video composition
 - Firebase Authentication for Google and phone login
@@ -64,8 +64,8 @@ Copy-Item .env.example .env.local
 
 Required values:
 
-- `OPENAI_API_KEY`
-- `ELEVENLABS_API_KEY`
+- `GEMINI_API_KEY`
+- `GOOGLE_TTS_API_KEY` or Google service-account auth via `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_APPLICATION_CREDENTIALS`
 - `PEXELS_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
@@ -76,8 +76,8 @@ Required values:
 
 Optional values:
 
-- `OPENAI_MODEL` defaults to `gpt-4o-mini`
-- `ELEVENLABS_MODEL` defaults to `eleven_multilingual_v2`
+- `GEMINI_MODEL` defaults to `gemini-2.5-flash`
+- `GOOGLE_CLOUD_PROJECT_ID` is recommended when using service-account auth for Google TTS
 - `FFMPEG_PATH` defaults to `ffmpeg`
 - `FFPROBE_PATH` defaults to `ffprobe`
 - `BLOB_READ_WRITE_TOKEN` enables durable runtime media storage on Vercel
@@ -112,8 +112,8 @@ Before deploying:
 3. In Vercel, create a Blob store for the project
 4. Confirm `BLOB_READ_WRITE_TOKEN` is available in the project environment variables
 5. Add these environment variables in Vercel:
-   - `OPENAI_API_KEY`
-   - `ELEVENLABS_API_KEY`
+   - `GEMINI_API_KEY`
+   - `GOOGLE_TTS_API_KEY` or service-account auth variables for Google TTS
    - `PEXELS_API_KEY`
    - `NEXT_PUBLIC_FIREBASE_API_KEY`
    - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
@@ -121,8 +121,7 @@ Before deploying:
    - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
    - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
    - `NEXT_PUBLIC_FIREBASE_APP_ID`
-   - `OPENAI_MODEL`
-   - `ELEVENLABS_MODEL`
+   - `GEMINI_MODEL`
 6. Do not set the Windows-only `FFMPEG_PATH` and `FFPROBE_PATH` values in Vercel unless you intentionally override the packaged Linux binaries
 
 For local development, your existing `.env.local` can still point at the project-local Windows binaries.
@@ -146,10 +145,11 @@ components/
   step-progress.tsx
   voice-card.tsx
 lib/
-  elevenlabs.ts
+  google-auth.ts
+  google-tts.ts
   errors.ts
   ffmpeg.ts
-  openai.ts
+  gemini.ts
   pexels.ts
   prompts.ts
   storage.ts
@@ -170,16 +170,16 @@ runtime/
 
 ## API flow
 
-1. `/api/scripts` uses OpenAI to create 3 script options.
-2. `/api/voices` uses ElevenLabs to create preview MP3 files.
-3. `/api/metadata` uses OpenAI to create publishing metadata.
-4. `/api/video` downloads stock clips, builds subtitles, and renders the final MP4 with FFmpeg.
+1. `/api/scripts` uses Gemini to create 3 script options.
+2. `/api/voices` uses Google Cloud Text-to-Speech to create preview MP3 files.
+3. `/api/metadata` uses Gemini to create publishing metadata.
+4. `/api/video` downloads stock clips, builds subtitles, and renders the final 30/60-second MP4 with FFmpeg.
 
 ## Troubleshooting
 
 - If login is blocked, confirm Google and Phone sign-in are enabled in Firebase Authentication.
 - For phone auth, add your local and production domains to Firebase authorized domains.
-- If voice generation fails, confirm your ElevenLabs key has text-to-speech access.
+- If voice generation fails, confirm Cloud Text-to-Speech is enabled and your Google auth belongs to a billing-enabled project.
 - If video rendering fails immediately, verify `ffmpeg` and `ffprobe` can be executed from your shell.
 - If stock footage does not appear, check the `PEXELS_API_KEY`. The app will still render with fallback visuals.
-- If OpenAI requests fail, confirm your model name and API key are valid.
+- If Gemini requests fail, confirm your model name and API key are valid.

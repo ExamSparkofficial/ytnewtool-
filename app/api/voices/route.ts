@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { toErrorResponse } from "@/lib/errors";
-import { generateVoiceVariations } from "@/lib/elevenlabs";
+import { generateVoiceVariations } from "@/lib/google-tts";
 import { cleanupExpiredArtifacts } from "@/lib/storage";
 import { scriptSelectionSchema } from "@/lib/validators";
 

@@ -13,13 +13,18 @@ import type {
 } from "@/lib/types";
 import { stripMarkdown } from "@/lib/utils";
 
-interface ChatCompletionResponse {
-  choices?: Array<{
-    message?: {
-      content?: string;
-      refusal?: string | null;
+interface GeminiGenerateContentResponse {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
     };
   }>;
+  promptFeedback?: {
+    blockReason?: string;
+  };
 }
 
 async function createStructuredCompletion<T>(params: {
@@ -28,54 +33,53 @@ async function createStructuredCompletion<T>(params: {
   system: string;
   user: string;
 }) {
-  // Keep the OpenAI integration centralized so every route gets the same
-  // structured-output handling and error surface.
-  const apiKey = getRequiredEnv("OPENAI_API_KEY");
-  const model = getOptionalEnv("OPENAI_MODEL", "gpt-4o-mini");
+  const apiKey = getRequiredEnv("GEMINI_API_KEY");
+  const model = getOptionalEnv("GEMINI_MODEL", "gemini-2.5-flash");
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.9,
-      messages: [
-        {
-          role: "system",
-          content: params.system
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: params.system }]
         },
-        {
-          role: "user",
-          content: params.user
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: params.user }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.9,
+          responseMimeType: "application/json",
+          responseJsonSchema: params.schema
         }
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: params.schemaName,
-          strict: true,
-          schema: params.schema
-        }
-      }
-    })
-  });
-
-  await ensureOk(response, "OpenAI");
-  const payload = await readJson<ChatCompletionResponse>(response);
-  const message = payload.choices?.[0]?.message;
-
-  if (!message?.content) {
-    if (message?.refusal) {
-      throw new AppError(`OpenAI refused the request: ${message.refusal}`, 400);
+      })
     }
+  );
 
-    throw new AppError("OpenAI returned an empty response.", 502);
+  await ensureOk(response, "Gemini");
+  const payload = await readJson<GeminiGenerateContentResponse>(response);
+  const candidate = payload.candidates?.[0];
+  const text = candidate?.content?.parts?.map((part) => part.text ?? "").join("").trim();
+
+  if (!text) {
+    const reason = payload.promptFeedback?.blockReason ?? candidate?.finishReason ?? "empty response";
+    throw new AppError(`Gemini returned no JSON output: ${reason}.`, 502);
   }
 
-  return JSON.parse(message.content) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new AppError(`Gemini returned invalid JSON: ${text.slice(0, 200)}`, 502);
+  }
 }
 
 export async function generateScripts(

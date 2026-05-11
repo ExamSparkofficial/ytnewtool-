@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { toErrorResponse } from "@/lib/errors";
-import { generateMetadata } from "@/lib/openai";
+import { generateMetadata } from "@/lib/gemini";
 import { metadataSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";

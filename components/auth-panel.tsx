@@ -5,9 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConfirmationResult, User } from "firebase/auth";
 import {
   RecaptchaVerifier,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPhoneNumber,
   signInWithPopup,
+  signInWithRedirect,
   signOut
 } from "firebase/auth";
 
@@ -24,6 +26,8 @@ interface AuthPanelProps {
 
 export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -61,29 +65,79 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
   }, [hasMounted, onAuthStateChange]);
 
   useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      return;
+    }
+
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          setAuthNotice("Signed in successfully. Generation is now unlocked.");
+        }
+      })
+      .catch((error) => {
+        setAuthError(error instanceof Error ? error.message : "Google sign-in could not be completed.");
+      });
+  }, [hasMounted]);
+
+  useEffect(() => {
     if (!isOpen || !isConfigured || confirmationResult || !hasMounted) {
       return;
     }
 
     const auth = getFirebaseAuth();
-    if (!auth || typeof window === "undefined") {
+    const container = recaptchaContainerRef.current;
+
+    if (!auth || !container || typeof window === "undefined") {
       return;
     }
 
-    const existing = (window as Window & { vyntrixRecaptcha?: RecaptchaVerifier }).vyntrixRecaptcha;
-    if (existing) {
+    if (recaptchaVerifierRef.current) {
       return;
     }
 
-    const verifier = new RecaptchaVerifier(auth, "phone-recaptcha", {
-      size: "normal"
-    });
+    let verifier: RecaptchaVerifier | null = null;
 
-    (window as Window & { vyntrixRecaptcha?: RecaptchaVerifier }).vyntrixRecaptcha = verifier;
+    try {
+      verifier = new RecaptchaVerifier(auth, container, {
+        size: "normal"
+      });
+      recaptchaVerifierRef.current = verifier;
+
+      void verifier.render().catch((error) => {
+        if (recaptchaVerifierRef.current === verifier) {
+          recaptchaVerifierRef.current = null;
+        }
+
+        verifier?.clear();
+        setAuthError(
+          error instanceof Error
+            ? error.message
+            : "reCAPTCHA could not be loaded. Check your Firebase authorized domains."
+        );
+      });
+    } catch (error) {
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : "reCAPTCHA could not be initialized. Reopen the profile panel and try again."
+      );
+      return;
+    }
 
     return () => {
-      verifier.clear();
-      delete (window as Window & { vyntrixRecaptcha?: RecaptchaVerifier }).vyntrixRecaptcha;
+      if (verifier) {
+        verifier.clear();
+      }
+
+      if (recaptchaVerifierRef.current === verifier) {
+        recaptchaVerifierRef.current = null;
+      }
     };
   }, [confirmationResult, hasMounted, isConfigured, isOpen]);
 
@@ -141,7 +195,14 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
     setIsBusy(true);
 
     try {
-      await signInWithPopup(auth, createGoogleProvider());
+      const provider = createGoogleProvider();
+
+      if (process.env.NODE_ENV === "production") {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
+      await signInWithPopup(auth, provider);
       setIsOpen(false);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Google sign-in failed.");
@@ -152,7 +213,7 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
 
   async function handlePhoneVerification() {
     const auth = getFirebaseAuth();
-    const verifier = (window as Window & { vyntrixRecaptcha?: RecaptchaVerifier }).vyntrixRecaptcha;
+    const verifier = recaptchaVerifierRef.current;
 
     if (!auth || !verifier) {
       setAuthError("Firebase phone login is not ready yet. Reopen the login menu and try again.");
@@ -334,7 +395,11 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
                     </label>
 
                     <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/35 p-3">
-                      <div id="phone-recaptcha" className="overflow-hidden rounded-xl" />
+                      <div
+                        id="phone-recaptcha"
+                        ref={recaptchaContainerRef}
+                        className="overflow-hidden rounded-xl"
+                      />
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">

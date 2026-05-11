@@ -1,6 +1,6 @@
 import { AppError } from "@/lib/errors";
 
-export function getRequiredEnv(name: "OPENAI_API_KEY" | "ELEVENLABS_API_KEY") {
+export function getRequiredEnv(name: "GEMINI_API_KEY") {
   const value = process.env[name];
 
   if (!value) {

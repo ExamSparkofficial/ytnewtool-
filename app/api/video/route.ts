@@ -25,7 +25,7 @@ import type { GeneratedVideo, VideoCredit } from "@/lib/types";
 import { videoRenderSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
@@ -40,8 +40,8 @@ export async function POST(request: Request) {
       payload.audioAssetKey,
       runtimePath(jobDir, "voice-track.mp3")
     );
-    const audioDuration = await getMediaDuration(audioPath);
-    const targetDuration = Math.max(audioDuration, payload.duration);
+    await getMediaDuration(audioPath);
+    const targetDuration = payload.duration;
 
     const clipCount = payload.duration === 60 ? 3 : 2;
     const pexelsClips = await searchPexelsClips(payload.keyword, clipCount);
@@ -106,7 +106,8 @@ export async function POST(request: Request) {
       baseVideoPath,
       audioPath,
       subtitlePath: subtitlesPath,
-      outputPath: finalVideoPath
+      outputPath: finalVideoPath,
+      durationSeconds: targetDuration
     });
 
     const outputBuffer = await readFile(finalVideoPath);

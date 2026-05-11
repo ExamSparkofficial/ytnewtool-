@@ -164,6 +164,7 @@ export async function muxVideoWithAudioAndSubtitles(params: {
   audioPath: string;
   subtitlePath: string;
   outputPath: string;
+  durationSeconds: number;
 }) {
   const subtitleFilter = `subtitles='${escapeSubtitlePath(
     params.subtitlePath
@@ -181,6 +182,8 @@ export async function muxVideoWithAudioAndSubtitles(params: {
     "0:v:0",
     "-map",
     "1:a:0",
+    "-af",
+    "apad",
     "-c:v",
     "libx264",
     "-preset",
@@ -191,7 +194,8 @@ export async function muxVideoWithAudioAndSubtitles(params: {
     "aac",
     "-b:a",
     "192k",
-    "-shortest",
+    "-t",
+    params.durationSeconds.toFixed(2),
     "-movflags",
     "+faststart",
     "-pix_fmt",
