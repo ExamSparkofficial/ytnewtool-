@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { getRequiredEnv, getOptionalEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
-import { ensureOk, readJson } from "@/lib/http";
+import { readJson } from "@/lib/http";
 import { getMetadataPrompt, getScriptPrompt } from "@/lib/prompts";
 import type {
   ContentLanguage,
@@ -27,6 +27,18 @@ interface GeminiGenerateContentResponse {
   };
 }
 
+const defaultGeminiModel = "gemini-2.5-flash";
+
+function resolveGeminiModel() {
+  const configuredModel = getOptionalEnv("GEMINI_MODEL", defaultGeminiModel).trim();
+
+  if (!configuredModel || configuredModel.startsWith("gemini-1.5")) {
+    return defaultGeminiModel;
+  }
+
+  return configuredModel;
+}
+
 async function createStructuredCompletion<T>(params: {
   schemaName: string;
   schema: Record<string, unknown>;
@@ -34,7 +46,7 @@ async function createStructuredCompletion<T>(params: {
   user: string;
 }) {
   const apiKey = getRequiredEnv("GEMINI_API_KEY");
-  const model = getOptionalEnv("GEMINI_MODEL", "gemini-2.5-flash");
+  const model = resolveGeminiModel();
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
@@ -65,7 +77,19 @@ async function createStructuredCompletion<T>(params: {
     }
   );
 
-  await ensureOk(response, "Gemini");
+  if (!response.ok) {
+    const text = await response.text();
+    const hint =
+      response.status === 403
+        ? " Check that the Generative Language API is enabled for the Google Cloud project, your API key is unrestricted or allows generativelanguage.googleapis.com, and Vercel is redeployed with GEMINI_MODEL=gemini-2.5-flash or no GEMINI_MODEL override."
+        : "";
+
+    throw new AppError(
+      `Gemini ${model} request failed (${response.status}): ${text.slice(0, 280)}${hint}`,
+      502
+    );
+  }
+
   const payload = await readJson<GeminiGenerateContentResponse>(response);
   const candidate = payload.candidates?.[0];
   const text = candidate?.content?.parts?.map((part) => part.text ?? "").join("").trim();

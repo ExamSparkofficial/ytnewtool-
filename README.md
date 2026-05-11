@@ -70,6 +70,7 @@ Required values:
 Optional values:
 
 - `GEMINI_MODEL` defaults to `gemini-2.5-flash`
+- Any old `GEMINI_MODEL=gemini-1.5...` value is ignored and upgraded to `gemini-2.5-flash`
 - `GOOGLE_CLOUD_PROJECT_ID` is recommended when using service-account auth for Google TTS
 - `FFMPEG_PATH` defaults to `ffmpeg`
 - `FFPROBE_PATH` defaults to `ffprobe`
