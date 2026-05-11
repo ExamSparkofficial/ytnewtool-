@@ -65,7 +65,7 @@ Copy-Item .env.example .env.local
 Required values:
 
 - `GEMINI_API_KEY`
-- `GOOGLE_TTS_API_KEY` or Google service-account auth via `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_APPLICATION_CREDENTIALS`
+- `GOOGLE_TTS_API_KEY`, or reuse `GEMINI_API_KEY` if it was created in the same billing-enabled Google Cloud project with Text-to-Speech enabled, or use service-account auth via `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_APPLICATION_CREDENTIALS`
 - `PEXELS_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`

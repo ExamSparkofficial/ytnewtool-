@@ -9,7 +9,6 @@ import {
   onAuthStateChanged,
   signInWithPhoneNumber,
   signInWithPopup,
-  signInWithRedirect,
   signOut
 } from "firebase/auth";
 
@@ -22,6 +21,20 @@ import {
 
 interface AuthPanelProps {
   onAuthStateChange: (user: User | null) => void;
+}
+
+function getAuthErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+
+  if (
+    message.includes("auth/unauthorized-domain") ||
+    message.includes("current domain is not authorized")
+  ) {
+    const domain = typeof window === "undefined" ? "your deployed domain" : window.location.hostname;
+    return `Firebase has not authorized ${domain} for login yet. Add ${domain} in Firebase Console > Authentication > Settings > Authorized domains, then redeploy or refresh.`;
+  }
+
+  return message || fallback;
 }
 
 export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
@@ -81,7 +94,7 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
         }
       })
       .catch((error) => {
-        setAuthError(error instanceof Error ? error.message : "Google sign-in could not be completed.");
+        setAuthError(getAuthErrorMessage(error, "Google sign-in could not be completed."));
       });
   }, [hasMounted]);
 
@@ -116,16 +129,18 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
 
         verifier?.clear();
         setAuthError(
-          error instanceof Error
-            ? error.message
-            : "reCAPTCHA could not be loaded. Check your Firebase authorized domains."
+          getAuthErrorMessage(
+            error,
+            "reCAPTCHA could not be loaded. Check your Firebase authorized domains."
+          )
         );
       });
     } catch (error) {
       setAuthError(
-        error instanceof Error
-          ? error.message
-          : "reCAPTCHA could not be initialized. Reopen the profile panel and try again."
+        getAuthErrorMessage(
+          error,
+          "reCAPTCHA could not be initialized. Reopen the profile panel and try again."
+        )
       );
       return;
     }
@@ -196,16 +211,10 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
 
     try {
       const provider = createGoogleProvider();
-
-      if (process.env.NODE_ENV === "production") {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-
       await signInWithPopup(auth, provider);
       setIsOpen(false);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Google sign-in failed.");
+      setAuthError(getAuthErrorMessage(error, "Google sign-in failed."));
     } finally {
       setIsBusy(false);
     }
@@ -229,7 +238,7 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
       setConfirmationResult(result);
       setAuthNotice("Verification code sent. Enter the 6-digit OTP to continue.");
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Unable to send verification code.");
+      setAuthError(getAuthErrorMessage(error, "Unable to send verification code."));
     } finally {
       setIsBusy(false);
     }
@@ -249,7 +258,7 @@ export function AuthPanel({ onAuthStateChange }: AuthPanelProps) {
       resetPhoneFlow();
       setIsOpen(false);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Invalid verification code.");
+      setAuthError(getAuthErrorMessage(error, "Invalid verification code."));
     } finally {
       setIsBusy(false);
     }
