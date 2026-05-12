@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     const jobDir = await createRuntimeJobDir(jobId);
     const audioPath = await materializeAssetReference(
       payload.audioAssetKey,
-      runtimePath(jobDir, "voice-track.mp3")
+      runtimePath(jobDir, "voice-track.wav")
     );
     await getMediaDuration(audioPath);
     const targetDuration = payload.duration;

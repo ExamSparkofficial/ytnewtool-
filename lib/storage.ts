@@ -25,6 +25,10 @@ function getRuntimeRoot() {
 }
 
 function getContentType(kind: PublicKind, fileName: string) {
+  if (fileName.endsWith(".wav")) {
+    return "audio/wav";
+  }
+
   if (kind === "audio" || fileName.endsWith(".mp3")) {
     return "audio/mpeg";
   }

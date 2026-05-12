@@ -35,7 +35,7 @@ export function VoiceCard({ voice, selected, onSelect }: VoiceCardProps) {
       </div>
 
       <audio className="mt-5 w-full" controls preload="none">
-        <source src={voice.previewUrl} type="audio/mpeg" />
+        <source src={voice.previewUrl} />
       </audio>
     </button>
   );

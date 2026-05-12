@@ -11,7 +11,7 @@ The input flow includes a language selector so the generated script, spoken voic
 - Open generation flow with login temporarily disabled
 - 3 Gemini-generated short video scripts per request
 - Language-aware output for English, Hindi, and Hinglish
-- 3 Google Cloud Text-to-Speech voice preview variations
+- 3 Gemini TTS voice preview variations
 - MP4 rendering with FFmpeg, subtitles, and stock footage
 - Vercel-compatible runtime storage with Blob-backed media URLs
 - Pexels stock clips with automatic fallback visuals if no clip is available
@@ -26,7 +26,7 @@ The input flow includes a language selector so the generated script, spoken voic
 - Tailwind CSS
 - Next.js route handlers for backend APIs
 - Gemini API for scripts and metadata
-- Google Cloud Text-to-Speech API for voice generation
+- Gemini TTS API for voice generation
 - Pexels API for stock footage
 - FFmpeg and ffprobe for video composition
 
@@ -64,14 +64,13 @@ Copy-Item .env.example .env.local
 Required values:
 
 - `GEMINI_API_KEY`
-- `GOOGLE_TTS_API_KEY`, or reuse `GEMINI_API_KEY` if it was created in the same billing-enabled Google Cloud project with Text-to-Speech enabled, or use service-account auth via `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_APPLICATION_CREDENTIALS`
 - `PEXELS_API_KEY`
 
 Optional values:
 
 - `GEMINI_MODEL` defaults to `gemini-2.5-flash`
 - Any old `GEMINI_MODEL=gemini-1.5...` value is ignored and upgraded to `gemini-2.5-flash`
-- `GOOGLE_CLOUD_PROJECT_ID` is recommended when using service-account auth for Google TTS
+- `GEMINI_TTS_MODEL` defaults to `gemini-2.5-flash-preview-tts`
 - `FFMPEG_PATH` defaults to `ffmpeg`
 - `FFPROBE_PATH` defaults to `ffprobe`
 - `BLOB_READ_WRITE_TOKEN` enables durable runtime media storage on Vercel
@@ -107,9 +106,9 @@ Before deploying:
 4. Confirm `BLOB_READ_WRITE_TOKEN` is available in the project environment variables
 5. Add these environment variables in Vercel:
    - `GEMINI_API_KEY`
-   - `GOOGLE_TTS_API_KEY` or service-account auth variables for Google TTS
    - `PEXELS_API_KEY`
    - `GEMINI_MODEL`
+   - `GEMINI_TTS_MODEL`
 6. Do not set the Windows-only `FFMPEG_PATH` and `FFPROBE_PATH` values in Vercel unless you intentionally override the packaged Linux binaries
 
 For local development, your existing `.env.local` can still point at the project-local Windows binaries.
@@ -133,7 +132,6 @@ components/
   step-progress.tsx
   voice-card.tsx
 lib/
-  google-auth.ts
   google-tts.ts
   errors.ts
   ffmpeg.ts
@@ -159,13 +157,13 @@ runtime/
 ## API flow
 
 1. `/api/scripts` uses Gemini to create 3 script options.
-2. `/api/voices` uses Google Cloud Text-to-Speech to create preview MP3 files.
+2. `/api/voices` uses Gemini TTS to create preview WAV files.
 3. `/api/metadata` uses Gemini to create publishing metadata.
 4. `/api/video` downloads stock clips, builds subtitles, and renders the final 30/60-second MP4 with FFmpeg.
 
 ## Troubleshooting
 
-- If voice generation fails, confirm Cloud Text-to-Speech is enabled and your Google auth belongs to a billing-enabled project.
+- If voice generation fails, confirm the Gemini API key belongs to a billing-enabled project and supports Gemini TTS.
 - If video rendering fails immediately, verify `ffmpeg` and `ffprobe` can be executed from your shell.
 - If stock footage does not appear, check the `PEXELS_API_KEY`. The app will still render with fallback visuals.
 - If Gemini requests fail, confirm your model name and API key are valid.

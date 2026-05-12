@@ -3,25 +3,30 @@ import { rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { getGoogleCloudAccessToken } from "@/lib/google-auth";
+import { getOptionalEnv, getRequiredEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
-import { ensureOk, readJson } from "@/lib/http";
 import { writePublicBinary } from "@/lib/storage";
 import type { ContentLanguage, Tone, VoiceVariation } from "@/lib/types";
 import { getMediaDuration } from "@/lib/ffmpeg";
 
-type SsmlGender = "MALE" | "FEMALE";
-
 type VoiceProfile = {
   label: string;
   description: string;
-  gender: SsmlGender;
-  speakingRate: number;
-  pitch: number;
+  voiceName: string;
+  instruction: string;
 };
 
-type TtsResponse = {
-  audioContent?: string;
+type GeminiTtsResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        inlineData?: {
+          mimeType?: string;
+          data?: string;
+        };
+      }>;
+    };
+  }>;
 };
 
 const languageDescriptions: Record<ContentLanguage, string> = {
@@ -30,107 +35,122 @@ const languageDescriptions: Record<ContentLanguage, string> = {
   hinglish: "Optimized for Hinglish delivery."
 };
 
-const languageCodes: Record<ContentLanguage, string> = {
-  english: "en-US",
-  hindi: "hi-IN",
-  hinglish: "en-IN"
+const languageInstructions: Record<ContentLanguage, string> = {
+  english: "Speak in natural English.",
+  hindi: "Speak in natural Hindi using a modern Indian cadence.",
+  hinglish: "Speak in natural Hinglish with an Indian creator cadence."
 };
 
 const toneVoices: Record<Tone, VoiceProfile[]> = {
   motivational: [
     {
       label: "Bold Coach",
-      description: "Confident and punchy Google TTS delivery for hype-driven shorts.",
-      gender: "MALE",
-      speakingRate: 1.08,
-      pitch: 1.5
+      description: "Confident and punchy Gemini TTS delivery for hype-driven shorts.",
+      voiceName: "Kore",
+      instruction: "Use a bold, energetic, coach-like delivery with strong emphasis."
     },
     {
       label: "Driven Narrator",
       description: "Smooth, polished energy for inspiring performance content.",
-      gender: "FEMALE",
-      speakingRate: 1.04,
-      pitch: 0.5
+      voiceName: "Puck",
+      instruction: "Use a bright, upbeat delivery with crisp pacing."
     },
     {
       label: "Fast Closer",
       description: "Sharper pacing for strong hooks and decisive CTAs.",
-      gender: "MALE",
-      speakingRate: 1.15,
-      pitch: 2
+      voiceName: "Charon",
+      instruction: "Use a direct, quick, high-conviction delivery."
     }
   ],
   finance: [
     {
       label: "Analyst",
-      description: "Measured and credible Google TTS delivery for educational money content.",
-      gender: "MALE",
-      speakingRate: 0.98,
-      pitch: -1
+      description: "Measured and credible Gemini TTS delivery for educational money content.",
+      voiceName: "Charon",
+      instruction: "Use a calm, trustworthy analyst tone with clear pacing."
     },
     {
       label: "Executive",
       description: "Authority-forward tone with calm confidence.",
-      gender: "FEMALE",
-      speakingRate: 0.96,
-      pitch: -0.5
+      voiceName: "Kore",
+      instruction: "Use a composed, confident executive delivery."
     },
     {
       label: "Explainer",
       description: "Clear pacing for market breakdowns and practical tips.",
-      gender: "MALE",
-      speakingRate: 1,
-      pitch: 0
+      voiceName: "Puck",
+      instruction: "Use a friendly explainer tone that is easy to follow."
     }
   ],
   storytelling: [
     {
       label: "Cinematic",
       description: "Warm, immersive narration with a dramatic touch.",
-      gender: "MALE",
-      speakingRate: 0.94,
-      pitch: -1.5
+      voiceName: "Charon",
+      instruction: "Use a warm cinematic narrator delivery with dramatic pauses."
     },
     {
       label: "Conversational",
       description: "Natural spoken cadence for casual story-led shorts.",
-      gender: "FEMALE",
-      speakingRate: 1,
-      pitch: 0
+      voiceName: "Puck",
+      instruction: "Use a conversational, natural creator voice."
     },
     {
       label: "Narrative Lift",
       description: "Balanced emotion for hooks, reveals, and satisfying endings.",
-      gender: "FEMALE",
-      speakingRate: 0.98,
-      pitch: 1
+      voiceName: "Kore",
+      instruction: "Use an emotionally balanced delivery with a satisfying lift at the end."
     }
   ]
 };
 
-async function getTtsHeaders() {
-  const apiKey =
-    process.env.GOOGLE_TTS_API_KEY ?? process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY;
+function parseSampleRate(mimeType = "") {
+  const match = mimeType.match(/rate=(\d+)/i);
+  return match ? Number.parseInt(match[1], 10) : 24000;
+}
 
-  if (apiKey) {
-    return {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    };
+function pcmToWav(pcmBuffer: Buffer, sampleRate: number) {
+  const header = Buffer.alloc(44);
+  const channels = 1;
+  const bitsPerSample = 16;
+  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
+  const blockAlign = (channels * bitsPerSample) / 8;
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcmBuffer.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcmBuffer.length, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
+}
+
+function extractAudioBuffer(payload: GeminiTtsResponse) {
+  const inlineData = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)
+    ?.inlineData;
+
+  if (!inlineData?.data) {
+    throw new AppError("Gemini TTS returned empty audio.", 502);
   }
 
-  const accessToken = await getGoogleCloudAccessToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${accessToken}`
-  };
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT;
-
-  if (projectId) {
-    headers["x-goog-user-project"] = projectId;
+  const audioBuffer = Buffer.from(inlineData.data, "base64");
+  if (!audioBuffer.length) {
+    throw new AppError("Gemini TTS returned empty audio.", 502);
   }
 
-  return headers;
+  if (inlineData.mimeType?.includes("audio/wav")) {
+    return audioBuffer;
+  }
+
+  return pcmToWav(audioBuffer, parseSampleRate(inlineData.mimeType));
 }
 
 export async function generateVoiceVariations(
@@ -138,44 +158,57 @@ export async function generateVoiceVariations(
   tone: Tone,
   language: ContentLanguage
 ) {
+  const apiKey = getRequiredEnv("GEMINI_API_KEY");
+  const model = getOptionalEnv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts");
   const profiles = toneVoices[tone];
-  const languageCode = languageCodes[language];
-  const headers = await getTtsHeaders();
 
   const results = await Promise.allSettled(
     profiles.map(async (profile) => {
-      const response = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          input: {
-            text: scriptText
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+          model
+        )}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey
           },
-          voice: {
-            languageCode,
-            ssmlGender: profile.gender
-          },
-          audioConfig: {
-            audioEncoding: "MP3",
-            speakingRate: profile.speakingRate,
-            pitch: profile.pitch
-          }
-        })
-      });
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `${profile.instruction} ${languageInstructions[language]} Speak only the script text, with no extra words.\n\nScript:\n${scriptText}`
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: profile.voiceName
+                  }
+                }
+              }
+            }
+          })
+        }
+      );
 
-      await ensureOk(response, "Google Text-to-Speech");
-
-      const payload = await readJson<TtsResponse>(response);
-      if (!payload.audioContent) {
-        throw new AppError("Google Text-to-Speech returned empty audio.", 502);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new AppError(
+          `Gemini TTS ${model} request failed (${response.status}): ${text.slice(0, 280)}`,
+          502
+        );
       }
 
-      const buffer = Buffer.from(payload.audioContent, "base64");
-      if (!buffer.length) {
-        throw new AppError("Google Text-to-Speech returned empty audio.", 502);
-      }
-
-      const fileName = `${randomUUID()}.mp3`;
+      const payload = (await response.json()) as GeminiTtsResponse;
+      const buffer = extractAudioBuffer(payload);
+      const fileName = `${randomUUID()}.wav`;
       const tempAudioPath = path.join(os.tmpdir(), fileName);
       let durationSeconds = 0;
 
@@ -192,7 +225,7 @@ export async function generateVoiceVariations(
         id: randomUUID(),
         label: profile.label,
         description: `${profile.description} ${languageDescriptions[language]}`,
-        voiceId: `google-tts:${languageCode}:${profile.gender}:${profile.speakingRate}:${profile.pitch}`,
+        voiceId: `gemini-tts:${model}:${profile.voiceName}`,
         assetKey: asset.assetKey,
         previewUrl: asset.publicUrl,
         durationSeconds
@@ -215,7 +248,7 @@ export async function generateVoiceVariations(
       })
       .join(" | ");
 
-    throw new AppError(`Unable to generate Google TTS voice variations. ${reasons}`, 502);
+    throw new AppError(`Unable to generate Gemini TTS voice variations. ${reasons}`, 502);
   }
 
   return successful;
