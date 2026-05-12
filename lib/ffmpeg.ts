@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
+import { access, chmod, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import ffmpegStatic from "ffmpeg-static";
@@ -11,23 +11,54 @@ import { AppError } from "@/lib/errors";
 
 const execFileAsync = promisify(execFile);
 
-function resolveBinaryPath(configuredPath: string | undefined, fallbackPath: string | null, commandName: string) {
-  if (configuredPath) {
-    return path.isAbsolute(configuredPath)
-      ? configuredPath
-      : path.join(process.cwd(), configuredPath);
+async function ensureExecutable(command: string) {
+  if (process.platform === "win32" || !path.isAbsolute(command)) {
+    return;
   }
 
-  if (fallbackPath) {
+  await chmod(command, 0o755).catch(() => undefined);
+}
+
+async function pathExists(filePath: string) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isWindowsBinaryOnNonWindows(filePath: string) {
+  return process.platform !== "win32" && filePath.toLowerCase().endsWith(".exe");
+}
+
+async function resolveBinaryPath(
+  configuredPath: string | undefined,
+  fallbackPath: string | null,
+  commandName: string
+) {
+  if (configuredPath) {
+    const resolvedPath = path.isAbsolute(configuredPath)
+      ? configuredPath
+      : path.join(process.cwd(), configuredPath);
+
+    if (!isWindowsBinaryOnNonWindows(resolvedPath) && (await pathExists(resolvedPath))) {
+      return resolvedPath;
+    }
+  }
+
+  if (fallbackPath && !isWindowsBinaryOnNonWindows(fallbackPath) && (await pathExists(fallbackPath))) {
     return fallbackPath;
   }
 
   return commandName;
 }
 
-async function runBinary(command: string, args: string[]) {
+async function runBinary(command: string | Promise<string>, args: string[]) {
   try {
-    await execFileAsync(command, args, {
+    const resolvedCommand = await command;
+    await ensureExecutable(resolvedCommand);
+    await execFileAsync(resolvedCommand, args, {
       windowsHide: true,
       maxBuffer: 1024 * 1024 * 10
     });
@@ -52,7 +83,7 @@ export function getFfprobePath() {
 
 export async function getMediaDuration(filePath: string) {
   const { stdout } = await execFileAsync(
-    getFfprobePath(),
+    await getFfprobePath(),
     [
       "-v",
       "error",
@@ -170,14 +201,12 @@ export async function muxVideoWithAudioAndSubtitles(params: {
     params.subtitlePath
   )}':force_style='FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00301709,BorderStyle=1,Outline=3,Shadow=0,MarginV=120,Alignment=2'`;
 
-  await runBinary(getFfmpegPath(), [
+  const baseArgs = [
     "-y",
     "-i",
     params.baseVideoPath,
     "-i",
     params.audioPath,
-    "-vf",
-    subtitleFilter,
     "-map",
     "0:v:0",
     "-map",
@@ -199,9 +228,20 @@ export async function muxVideoWithAudioAndSubtitles(params: {
     "-movflags",
     "+faststart",
     "-pix_fmt",
-    "yuv420p",
-    params.outputPath
-  ]);
+    "yuv420p"
+  ];
+
+  try {
+    await runBinary(getFfmpegPath(), [
+      ...baseArgs.slice(0, 5),
+      "-vf",
+      subtitleFilter,
+      ...baseArgs.slice(5),
+      params.outputPath
+    ]);
+  } catch {
+    await runBinary(getFfmpegPath(), [...baseArgs, params.outputPath]);
+  }
 }
 
 export function runtimePath(jobDir: string, fileName: string) {

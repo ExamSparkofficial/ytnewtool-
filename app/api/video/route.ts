@@ -54,23 +54,29 @@ export async function POST(request: Request) {
       for (const [index, clip] of pexelsClips.entries()) {
         const sourcePath = runtimePath(jobDir, `source-${index + 1}.mp4`);
         const segmentPath = runtimePath(jobDir, `segment-${index + 1}.mp4`);
-        const sourceBuffer = await downloadBinaryFile(clip.videoUrl);
 
-        await writeBinaryFile(sourcePath, sourceBuffer);
-        const usableOffset = Math.max((clip.duration - perClipDuration) / 2, 0);
+        try {
+          const sourceBuffer = await downloadBinaryFile(clip.videoUrl);
 
-        await normalizeClip({
-          inputPath: sourcePath,
-          outputPath: segmentPath,
-          clipDuration: perClipDuration,
-          startOffsetSeconds: usableOffset
-        });
+          await writeBinaryFile(sourcePath, sourceBuffer);
+          const usableOffset = Math.max((clip.duration - perClipDuration) / 2, 0);
 
-        workingSegments.push(segmentPath);
-        credits.push({
-          name: clip.userName,
-          url: clip.userUrl
-        });
+          await normalizeClip({
+            inputPath: sourcePath,
+            outputPath: segmentPath,
+            clipDuration: perClipDuration,
+            startOffsetSeconds: usableOffset
+          });
+
+          workingSegments.push(segmentPath);
+          credits.push({
+            name: clip.userName,
+            url: clip.userUrl
+          });
+        } catch {
+          // Skip individual stock clips that fail to download or normalize; the
+          // placeholder path below keeps rendering available.
+        }
       }
     }
 
