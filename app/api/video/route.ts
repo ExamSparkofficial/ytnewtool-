@@ -6,7 +6,6 @@ import { NextResponse } from "next/server";
 import {
   concatClips,
   createPlaceholderClip,
-  getMediaDuration,
   muxVideoWithAudioAndSubtitles,
   normalizeClip,
   runtimePath,
@@ -40,7 +39,6 @@ export async function POST(request: Request) {
       payload.audioAssetKey,
       runtimePath(jobDir, "voice-track.wav")
     );
-    await getMediaDuration(audioPath);
     const targetDuration = payload.duration;
 
     const clipCount = payload.duration === 60 ? 3 : 2;
@@ -116,7 +114,7 @@ export async function POST(request: Request) {
     const result: GeneratedVideo = {
       assetKey: savedVideo.assetKey,
       videoUrl: savedVideo.publicUrl,
-      durationSeconds: await getMediaDuration(finalVideoPath),
+      durationSeconds: targetDuration,
       usedFallbackVisuals: !pexelsClips.length,
       credits
     };

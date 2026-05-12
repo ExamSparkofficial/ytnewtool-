@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
         hostname: "**"
       }
     ]
+  },
+  outputFileTracingIncludes: {
+    "/api/video": ["./node_modules/ffmpeg-static/**/*"],
+    "/api/voices": ["./node_modules/ffmpeg-static/**/*"]
   }
 };
 

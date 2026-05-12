@@ -1,13 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { rm, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import { getOptionalEnv, getRequiredEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { writePublicBinary } from "@/lib/storage";
 import type { ContentLanguage, Tone, VoiceVariation } from "@/lib/types";
-import { getMediaDuration } from "@/lib/ffmpeg";
 
 type VoiceProfile = {
   label: string;
@@ -109,6 +105,10 @@ function parseSampleRate(mimeType = "") {
   return match ? Number.parseInt(match[1], 10) : 24000;
 }
 
+function pcmDurationSeconds(pcmBuffer: Buffer, sampleRate: number) {
+  return pcmBuffer.length / (sampleRate * 2);
+}
+
 function pcmToWav(pcmBuffer: Buffer, sampleRate: number) {
   const header = Buffer.alloc(44);
   const channels = 1;
@@ -133,6 +133,20 @@ function pcmToWav(pcmBuffer: Buffer, sampleRate: number) {
   return Buffer.concat([header, pcmBuffer]);
 }
 
+function readWavDurationSeconds(wavBuffer: Buffer) {
+  if (wavBuffer.length < 44 || wavBuffer.toString("ascii", 0, 4) !== "RIFF") {
+    return 0;
+  }
+
+  const channels = wavBuffer.readUInt16LE(22);
+  const sampleRate = wavBuffer.readUInt32LE(24);
+  const bitsPerSample = wavBuffer.readUInt16LE(34);
+  const dataSize = wavBuffer.readUInt32LE(40);
+  const bytesPerSecond = sampleRate * channels * (bitsPerSample / 8);
+
+  return bytesPerSecond > 0 ? dataSize / bytesPerSecond : 0;
+}
+
 function extractAudioBuffer(payload: GeminiTtsResponse) {
   const inlineData = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)
     ?.inlineData;
@@ -147,10 +161,17 @@ function extractAudioBuffer(payload: GeminiTtsResponse) {
   }
 
   if (inlineData.mimeType?.includes("audio/wav")) {
-    return audioBuffer;
+    return {
+      buffer: audioBuffer,
+      durationSeconds: readWavDurationSeconds(audioBuffer)
+    };
   }
 
-  return pcmToWav(audioBuffer, parseSampleRate(inlineData.mimeType));
+  const sampleRate = parseSampleRate(inlineData.mimeType);
+  return {
+    buffer: pcmToWav(audioBuffer, sampleRate),
+    durationSeconds: pcmDurationSeconds(audioBuffer, sampleRate)
+  };
 }
 
 export async function generateVoiceVariations(
@@ -207,18 +228,8 @@ export async function generateVoiceVariations(
       }
 
       const payload = (await response.json()) as GeminiTtsResponse;
-      const buffer = extractAudioBuffer(payload);
+      const { buffer, durationSeconds } = extractAudioBuffer(payload);
       const fileName = `${randomUUID()}.wav`;
-      const tempAudioPath = path.join(os.tmpdir(), fileName);
-      let durationSeconds = 0;
-
-      try {
-        await writeFile(tempAudioPath, buffer);
-        durationSeconds = await getMediaDuration(tempAudioPath);
-      } finally {
-        await rm(tempAudioPath, { force: true });
-      }
-
       const asset = await writePublicBinary("audio", fileName, buffer);
 
       return {
