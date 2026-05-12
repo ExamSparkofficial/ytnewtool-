@@ -34,7 +34,7 @@ function isWindowsBinaryOnNonWindows(filePath: string) {
 
 async function resolveBinaryPath(
   configuredPath: string | undefined,
-  fallbackPath: string | null,
+  fallbackPaths: Array<string | null | undefined>,
   commandName: string
 ) {
   if (configuredPath) {
@@ -47,8 +47,14 @@ async function resolveBinaryPath(
     }
   }
 
-  if (fallbackPath && !isWindowsBinaryOnNonWindows(fallbackPath) && (await pathExists(fallbackPath))) {
-    return fallbackPath;
+  for (const fallbackPath of fallbackPaths) {
+    if (
+      fallbackPath &&
+      !isWindowsBinaryOnNonWindows(fallbackPath) &&
+      (await pathExists(fallbackPath))
+    ) {
+      return fallbackPath;
+    }
   }
 
   return commandName;
@@ -73,12 +79,26 @@ async function runBinary(command: string | Promise<string>, args: string[]) {
 
 export function getFfmpegPath() {
   const configured = getOptionalEnv("FFMPEG_PATH");
-  return resolveBinaryPath(configured || undefined, ffmpegStatic, "ffmpeg");
+  const installerPlatform = `${process.platform}-${process.arch}`;
+  const installerBinary = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+  const installerPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "@ffmpeg-installer",
+    installerPlatform,
+    installerBinary
+  );
+
+  return resolveBinaryPath(
+    configured || undefined,
+    [ffmpegStatic, installerPath],
+    "ffmpeg"
+  );
 }
 
 export function getFfprobePath() {
   const configured = getOptionalEnv("FFPROBE_PATH");
-  return resolveBinaryPath(configured || undefined, ffprobeStatic.path ?? null, "ffprobe");
+  return resolveBinaryPath(configured || undefined, [ffprobeStatic.path], "ffprobe");
 }
 
 export async function getMediaDuration(filePath: string) {

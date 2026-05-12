@@ -15,8 +15,16 @@ const nextConfig: NextConfig = {
     ]
   },
   outputFileTracingIncludes: {
-    "/api/video": ["./node_modules/ffmpeg-static/**/*"],
-    "/api/voices": ["./node_modules/ffmpeg-static/**/*"]
+    "/api/video": [
+      "./node_modules/ffmpeg-static/**/*",
+      "./node_modules/@ffmpeg-installer/ffmpeg/**/*",
+      "./node_modules/@ffmpeg-installer/linux-x64/**/*"
+    ],
+    "/api/voices": [
+      "./node_modules/ffmpeg-static/**/*",
+      "./node_modules/@ffmpeg-installer/ffmpeg/**/*",
+      "./node_modules/@ffmpeg-installer/linux-x64/**/*"
+    ]
   }
 };
 
